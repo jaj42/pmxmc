@@ -14,7 +14,7 @@ def rate_at(t, infu_time, infu_rate):
 
 
 @wrap_jax
-def matrix_exp_wrapper(y0, meas_time, infu_time, infu_rate, params):
+def expm_solver(y0, meas_time, infu_time, infu_rate, params):
     p = params
     k10 = p["k10"]
     k12 = p["k12"]
@@ -22,7 +22,6 @@ def matrix_exp_wrapper(y0, meas_time, infu_time, infu_rate, params):
     k21 = p["k21"]
     k31 = p["k31"]
 
-    # System matrix: dA/dt = S @ A + B * u(t)
     S = jnp.zeros((3, 3))
     S = S.at[0, 0].set(-(k10 + k12 + k13))
     S = S.at[0, 1].set(k21)

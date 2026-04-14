@@ -9,6 +9,7 @@ dependencies = [
  "arviz-base>=1.0.0",
  "arviz-plots>=1.0.0",
  "arviz-stats>=1.0.0",
+ "diffrax>=0.7.2",
  "jax",
  "nutpie>=0.16.8",
  "pandas>=3.0.2",

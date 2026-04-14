@@ -1,0 +1,23 @@
+[project]
+name = "pymcpmx"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+ "arviz>=0.23.4",
+ "arviz-base>=1.0.0",
+ "arviz-plots>=1.0.0",
+ "arviz-stats>=1.0.0",
+ "jax",
+ "nutpie>=0.16.8",
+ "pandas>=3.0.2",
+ "pymc>=5.28.4",
+ "pymc-extras",
+ "pytensor",
+]
+
+[tool.uv.sources]
+pytensor = { path = "../../../devel/upstream/pytensor", editable = true }
+jax = { path = "../../../devel/upstream/jax", editable = true }
+pymc-extras = { path = "../upstream/pymc-extras", editable = true }

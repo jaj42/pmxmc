@@ -12,45 +12,27 @@ def rate_at(t, infu_time, infu_rate):
     return float(infu_rate[idx])
 
 
-def eigendecomposition(k10, k12, k13, k21, k31, V1):
-    k123 = k10 + k12 + k13
-    A_conc = jnp.asarray(
-        [
-            [-k123, k12, k13],
-            [k21, -k21, 0.0],
-            [k31, 0.0, -k31],
-        ]
-    )
-    eigvals_c, eigvecs_c = jnp.linalg.eig(A_conc, allow_eigvec_deriv=True)
+def eigendecomposition(S, scale, cmt=0):
+    eigvals_c, eigvecs_c = jnp.linalg.eig(S, allow_eigvec_deriv=True)
     eigvals = eigvals_c.real
     eigvecs = eigvecs_c.real
-    lambdas = -eigvals  # positive decay constants
+    lambdas = -eigvals
 
-    # Modal coordinates for a unit concentration bolus in compartment 1.
-    C0 = jnp.asarray([1.0 / V1, 0.0, 0.0])
-    alpha = jnp.linalg.inv(eigvecs) @ C0  # µg/L
+    C0 = jnp.zeros_like(lambdas)
+    C0 = C0.at[cmt].set(1.0 / scale)
+    alpha = jnp.linalg.inv(eigvecs) @ C0
+    coefs = eigvecs @ jnp.diag(alpha / lambdas).T
 
-    # p_coef[i] = eigvecs[0,i] * alpha[i] / lambda[i]
-    # → sum(p_coef) = 1/CL at steady state (unit infusion rate).
-    p_coef = eigvecs[0, :] * alpha / lambdas
-
-    return lambdas, p_coef
+    return lambdas, coefs
 
 
 @wrap_jax
-def eig_solver(y0, meas_time, infu_time, infu_rate, params):
-    p = params
-    k10 = p["k10"]
-    k12 = p["k12"]
-    k13 = p["k13"]
-    k21 = p["k21"]
-    k31 = p["k31"]
-    V1 = p["V1"]
+def eig_solver(
+    system_matrix, meas_time, infu_time, infu_rate, y0=None, scale=1.0, cmt=0
+):
+    lambdas, coefs = eigendecomposition(system_matrix, scale, cmt)
+    p_coef = coefs[cmt, :]
 
-    lambdas, p_coef = eigendecomposition(k10, k12, k13, k21, k31, V1)
-
-    # _start = min(float(meas_time[0]), float(infu_time[0]))
-    # _end = float(meas_time[-1])
     tbeg = min(meas_time[0], infu_time[0])
     tend = meas_time[-1]
 
@@ -62,7 +44,8 @@ def eig_solver(y0, meas_time, infu_time, infu_rate, params):
     dts = jnp.array(_dts)
     rates = jnp.array(_rates)
 
-    state0 = jnp.asarray(y0, dtype=jnp.float64)
+    if y0 is None:
+        y0 = jnp.zeros_like(lambdas)
 
     def step_fn(A, inputs):
         dt, rate = inputs
@@ -70,8 +53,8 @@ def eig_solver(y0, meas_time, infu_time, infu_rate, params):
         A_new = A * decay + p_coef * rate * (1 - decay)
         return A_new, A_new
 
-    _, all_states = jax.lax.scan(step_fn, state0, (dts, rates))
-    all_states_with_init = jnp.concatenate([state0[None, :], all_states], axis=0)
+    _, all_states = jax.lax.scan(step_fn, y0, (dts, rates))
+    all_states_with_init = jnp.concatenate([y0[None, :], all_states], axis=0)
 
     _meas_indices = np.where(np.isin(_all_times, meas_time))[0]
     states_at_meas = all_states_with_init[_meas_indices]

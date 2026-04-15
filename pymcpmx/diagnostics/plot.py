@@ -101,7 +101,7 @@ def main():
         plt.close()
 
         # SIGMA
-        az.plot_trace(idata, var_names=["^omega.*[^_]$"], filter_vars="regex")
+        az.plot_trace(idata, var_names=["^sigma.*[^_]$"], filter_vars="regex")
         plt.suptitle("SIGMA Trace")
         plt.tight_layout()
         pdf.savefig()

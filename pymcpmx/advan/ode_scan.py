@@ -74,7 +74,12 @@ def ode_scan_solver(y0, meas_time, infu_time, infu_rate, params):
     _, all_states = jax.lax.scan(
         step_fn,
         jnp.asarray(y0, dtype=jnp.float64),
-        (jnp.array(seg_t0s), jnp.array(seg_t1s), jnp.array(_rates), jnp.array(_is_jump)),
+        (
+            jnp.array(seg_t0s),
+            jnp.array(seg_t1s),
+            jnp.array(_rates),
+            jnp.array(_is_jump),
+        ),
     )
 
     # all_states: (n_segs, 3) — extract only segments ending at a measurement time

@@ -21,9 +21,10 @@ def rate_at(t, infu_time, infu_rate):
 
 def build_rate_func(infu_time, infu_rate):
     def worker(t):
-        _infu = jnp.asarray(infu_time)
-        idx = jnp.searchsorted(infu_time[1:], t, side="right")
+        _infu_time = jnp.asarray(infu_time)
+        _infu_rate = jnp.asarray(infu_rate)
+        idx = jnp.searchsorted(_infu_time[1:], t, side="right")
         idx = jnp.clip(idx, 0, len(infu_rate) - 1)
-        return jnp.where(t < _infu[0], 0.0, _infu[idx])
+        return jnp.where(t < _infu_time[0], 0.0, _infu_rate[idx])
 
     return worker

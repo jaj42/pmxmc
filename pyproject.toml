@@ -3,7 +3,7 @@ name = "pmxmc"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.10"
 dependencies = [
  "arviz>=0.23.4",
  "arviz-base>=1.0.0",

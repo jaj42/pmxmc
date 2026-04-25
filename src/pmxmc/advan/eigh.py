@@ -65,38 +65,62 @@ def eigendecomposition(S, scale, cmt=0):
     return lambdas, coef
 
 
-def eigh_advan_worker(S, meas_time, infu_time, infu_rate, y0=None, scale=1.0):
+def eigh_advan_worker(
+    S,
+    meas_time,
+    infu_time,
+    infu_rate,
+    y0=None,
+    scale=1.0,
+    bolus_time=None,
+    bolus_amt=None,
+):
     lambdas, p_coef = eigendecomposition(S, scale, 0)
     if y0 is None:
         y0 = jnp.zeros_like(lambdas)
 
+    bolus_time = np.asarray([] if bolus_time is None else bolus_time)
+    bolus_amt = np.asarray([] if bolus_amt is None else bolus_amt)
+
     tbeg = min(meas_time[0], infu_time[0])
+    if len(bolus_time):
+        tbeg = min(tbeg, bolus_time[0])
     tend = meas_time[-1]
 
     _relevant_itimes = infu_time[(infu_time >= tbeg) & (infu_time <= tend)]
-    _all_times = np.unique(np.concatenate([_relevant_itimes, meas_time]))
+    _relevant_btimes = bolus_time[(bolus_time >= tbeg) & (bolus_time <= tend)]
+    _all_times = np.unique(np.concatenate([_relevant_itimes, _relevant_btimes, meas_time]))
     _dts = np.diff(_all_times)
     _rates = np.array([rate_at(t, infu_time, infu_rate) for t in _all_times[:-1]])
 
+    # Bolus amounts aligned with _all_times[:-1]: applied at interval start.
+    _boluses = np.zeros(len(_dts))
+    for bt, ba in zip(bolus_time, bolus_amt):
+        idxs = np.where(_all_times[:-1] == bt)[0]
+        if len(idxs):
+            _boluses[idxs[0]] += ba
+
     dts = jnp.array(_dts)
     rates = jnp.array(_rates)
+    boluses = jnp.array(_boluses)
 
     state0 = jnp.asarray(y0, dtype=jnp.float64)
 
     def step_fn(A, inputs):
-        dt, rate = inputs
-        decay = jnp.exp(-lambdas * dt)  # (3,)
-        A_new = A * decay + p_coef * rate * (1 - decay)  # (3,)
+        dt, rate, bolus = inputs
+        A = A + bolus * lambdas * p_coef   # instantaneous bolus at interval start
+        decay = jnp.exp(-lambdas * dt)
+        A_new = A * decay + p_coef * rate * (1 - decay)
         return A_new, A_new
 
-    _, all_states = jax.lax.scan(step_fn, state0, (dts, rates))
+    _, all_states = jax.lax.scan(step_fn, state0, (dts, rates, boluses))
     # Prepend the initial state so indexing aligns with _all_times
     all_states_with_init = jnp.concatenate(
         [state0[None, :], all_states], axis=0
-    )  # (n_steps+1, 3)
+    )  # (n_steps+1, n_cmt)
 
     _meas_indices = np.where(np.isin(_all_times, meas_time))[0]
-    states_at_meas = all_states_with_init[_meas_indices]  # (n_meas, 3)
+    states_at_meas = all_states_with_init[_meas_indices]  # (n_meas, n_cmt)
 
     Cp = jnp.sum(states_at_meas, axis=-1)  # (n_meas,)
     return Cp

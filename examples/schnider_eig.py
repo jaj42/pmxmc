@@ -10,9 +10,8 @@ import numpy as np
 import nutpie
 import pymc as pm
 import pytensor.tensor as pt
-
 from pmxmc.advan import threecomp_advan as advan
-from pmxmc.io import read_dataset
+from pmxmc.io import read_nonmem_dataset
 from pmxmc.utils import add_omegas
 
 jax.config.update("jax_enable_x64", True)
@@ -97,7 +96,7 @@ def build_model(rates, dv, covar, bio_map) -> pm.Model:
 
 
 def main():
-    rate, dv, covar, bio_map = read_dataset("./schnider.csv")
+    rate, dv, covar, bio_map, _bolus = read_nonmem_dataset("./schnider.csv")
     model = build_model(rate, dv, covar, bio_map)
     add_omegas(model)
     with model:

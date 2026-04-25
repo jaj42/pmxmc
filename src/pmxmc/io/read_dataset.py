@@ -10,9 +10,12 @@ def _extract_rate_schedule(df: pd.DataFrame) -> pd.DataFrame:
     """
     Build a piecewise-constant infusion rate schedule from NONMEM dose records.
 
-    For each dose record (EVID == 1 or 4), creates two entries:
+    For each infusion record (EVID != 0, RATE > 0), creates two entries:
       - rate-ON  at TIME            with the infusion RATE
       - rate-OFF at TIME + AMT/RATE with RATE = 0
+
+    Bolus records (RATE == 0) are excluded; they are returned separately by
+    _extract_bolus_schedule.
 
     Parameters
     ----------
@@ -29,7 +32,7 @@ def _extract_rate_schedule(df: pd.DataFrame) -> pd.DataFrame:
     Assumes infusions within the same occasion do not overlap temporally.
     If they did, rates would need to be summed rather than set.
     """
-    doses = df[df["EVID"] != 0].copy()
+    doses = df[(df["EVID"] != 0) & (df["RATE"] > 0)].copy()
     doses["TINF"] = doses.eval("AMT / RATE")
     doses["TEND"] = doses.eval("TIME + TINF")
 
@@ -51,9 +54,31 @@ def _extract_rate_schedule(df: pd.DataFrame) -> pd.DataFrame:
     return result.set_index(["ID", "TIME"])
 
 
-def read_dataset(
+def _extract_bolus_schedule(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Extract instantaneous bolus doses (EVID != 0, RATE == 0, AMT > 0).
+
+    Returns
+    -------
+    DataFrame indexed by (ID, TIME) with a single AMT column, sorted.
+    Empty DataFrame with the correct structure if there are no bolus records.
+    """
+    boluses = df[(df["EVID"] != 0) & (df["RATE"] == 0) & (df["AMT"] > 0)].copy()
+    if boluses.empty:
+        empty = pd.DataFrame(columns=["AMT"])
+        empty.index = pd.MultiIndex.from_tuples([], names=["ID", "TIME"])
+        return empty
+    result = boluses[["ID", "TIME", "AMT"]].copy()
+    result["ID"] = result["ID"].astype(int)
+    return result.set_index(["ID", "TIME"]).sort_index()
+
+
+def read_nonmem_dataset(
     filepath: str,
-) -> tuple[pd.DataFrame, pd.Series, pd.DataFrame, pd.Series]:
+    covariates: list[str] | None = None,
+    sep: str = r"\s+",
+    dv_col: str = "DV",
+) -> tuple[pd.DataFrame, pd.Series, pd.DataFrame, pd.Series, pd.DataFrame]:
     """
     Read a NONMEM-style CSV and return data structures for Bayesian fitting.
 
@@ -73,9 +98,12 @@ def read_dataset(
         Per-biological-subject covariates indexed by SUBJID.
     bio_map : Series
         Mapping from composite occasion-ID → biological subject ID.
+    bolus : DataFrame
+        Instantaneous bolus doses indexed by (ID, TIME) with column AMT.
+        Empty if the dataset contains no bolus records.
     """
     # ---- read & coerce ----
-    df = pd.read_csv(filepath)
+    df = pd.read_csv(filepath, sep=sep)
     df = df.rename(columns={"@ID": "ID"})
     df = df.apply(pdtonum)
 
@@ -101,31 +129,24 @@ def read_dataset(
                 "Check occasion splitting logic."
             )
 
-    # ---- rate schedule ----
+    # ---- rate schedule & bolus schedule ----
     rate = _extract_rate_schedule(df)
+    bolus = _extract_bolus_schedule(df)
 
     # ---- observations (EVID == 0 only) ----
     obs = df[df["EVID"] == 0].copy()
     # The concentration column may be called "DV" or "CP" depending on
     # the dataset version.
-    if "CP" in obs.columns:
-        dv_col = "CP"
-    elif "DV" in obs.columns:
-        dv_col = "DV"
-    else:
-        raise KeyError("Dataset has neither a 'DV' nor a 'CP' column.")
     dv = obs.set_index(["ID", "TIME"])[dv_col]
+    dv = dv[~dv.index.duplicated(keep="first")]
 
     # ---- covariates (one row per biological subject) ----
-    covar = (
-        df.drop_duplicates("SUBJID")
-        .set_index("SUBJID")[["AGE", "WT", "HT", "M1F2"]]
-        .sort_index()
-    )
+    if covariates:
+        covar = df.drop_duplicates("SUBJID").set_index("SUBJID")[covariates].sort_index()
+    else:
+        covar = pd.DataFrame([])
 
     # ---- mapping: composite occasion-ID → biological subject ID ----
     bio_map = df.drop_duplicates("ID").set_index("ID")["SUBJID"].sort_index()
-    # print(bio_map)
-    # quit()
 
-    return rate, dv, covar, bio_map
+    return rate, dv, covar, bio_map, bolus

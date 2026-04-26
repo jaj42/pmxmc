@@ -22,19 +22,17 @@ jax.config.update("jax_enable_x64", True)
 
 @wrap_jax
 def _threecomp_single_occasion(
-    dts, rates, boluses, meas_indices,
-    k10, k12, k21, k13, k31, V1
+    dts, rates, boluses, meas_indices, k10, k12, k21, k13, k31, V1
 ):
     """Single-occasion 3-compartment PK solver (pure JAX, no batching)."""
-    V2 = (k12 / k21) * V1
-    V3 = (k13 / k31) * V1
-    a2 = k12 * jnp.sqrt(V1 / V2)
-    a3 = k13 * jnp.sqrt(V1 / V3)
+    a2 = k12 * jnp.sqrt(k21 / k12)
+    a3 = k13 * jnp.sqrt(k31 / k13)
+    k123 = k10 + k12 + k13
     S = jnp.array(
         [
-            [-(k10 + k12 + k13),  a2,   a3],
-            [               a2, -k21,  0.0],
-            [               a3,  0.0, -k31],
+            [-k123,   a2,   a3],
+            [   a2, -k21,    0],
+            [   a3,    0, -k31],
         ]
     )  # fmt: skip
     lambdas, p_coef = eigendecomposition(S, V1, 0)
@@ -61,7 +59,12 @@ threecomp_advan = pt.vectorize(
 def precompute_occasion_data(rates, dv, bolus, bio_map, bio_idx_map, unique_occ_ids):
     """Precompute padded numpy arrays for all occasions."""
     bio_indices, dts_list, rates_list, boluses_list, meas_idx_list, n_meas_list = (
-        [], [], [], [], [], []
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
     )
 
     for occ_id in unique_occ_ids:
@@ -109,11 +112,13 @@ def precompute_occasion_data(rates, dv, bolus, bio_map, bio_idx_map, unique_occ_
     max_steps = max(len(d) for d in dts_list)
     max_meas = max(len(m) for m in meas_idx_list)
 
-    dts_padded     = np.zeros((n_occ, max_steps), dtype=np.float64)
-    rates_padded   = np.zeros((n_occ, max_steps), dtype=np.float64)
+    dts_padded = np.zeros((n_occ, max_steps), dtype=np.float64)
+    rates_padded = np.zeros((n_occ, max_steps), dtype=np.float64)
     boluses_padded = np.zeros((n_occ, max_steps), dtype=np.float64)
     meas_idx_padded = np.zeros((n_occ, max_meas), dtype=np.int32)
-    for i, (d, r, b, mi) in enumerate(zip(dts_list, rates_list, boluses_list, meas_idx_list)):
+    for i, (d, r, b, mi) in enumerate(
+        zip(dts_list, rates_list, boluses_list, meas_idx_list)
+    ):
         dts_padded[i, : len(d)] = d
         rates_padded[i, : len(r)] = r
         boluses_padded[i, : len(b)] = b
@@ -125,14 +130,10 @@ def precompute_occasion_data(rates, dv, bolus, bio_map, bio_idx_map, unique_occ_
 
     return (
         np.array(bio_indices),
-            pt.as_tensor_variable(dts_padded),
-            pt.as_tensor_variable(rates_padded),
-            pt.as_tensor_variable(boluses_padded),
-            pt.as_tensor_variable(meas_idx_padded),
-        # dts_padded,
-        # rates_padded,
-        # boluses_padded,
-        # meas_idx_padded,
+        pt.as_tensor_variable(dts_padded),
+        pt.as_tensor_variable(rates_padded),
+        pt.as_tensor_variable(boluses_padded),
+        pt.as_tensor_variable(meas_idx_padded),
         valid_flat_indices,
     )
 
@@ -145,9 +146,14 @@ def build_model(rates, dv, covar, bio_map, bolus) -> pm.Model:
 
     DV = dv.to_numpy()
 
-    bio_indices, dts_padded, rates_padded, boluses_padded, meas_idx_padded, valid_flat_indices = (
-        precompute_occasion_data(rates, dv, bolus, bio_map, bio_idx_map, unique_occ_ids)
-    )
+    (
+        bio_indices,
+        dts_padded,
+        rates_padded,
+        boluses_padded,
+        meas_idx_padded,
+        valid_flat_indices,
+    ) = precompute_occasion_data(rates, dv, bolus, bio_map, bio_idx_map, unique_occ_ids)
 
     with pm.Model() as model:
         theta_V1 = pm.LogNormal("theta_V1", mu=np.log(4.5), sigma=0.5)
@@ -190,20 +196,16 @@ def build_model(rates, dv, covar, bio_map, bolus) -> pm.Model:
         Q3 = theta_Q3
 
         all_Cp = threecomp_advan(
-            # pt.as_tensor_variable(dts_padded),
-            # pt.as_tensor_variable(rates_padded),
-            # pt.as_tensor_variable(boluses_padded),
-            # pt.as_tensor_variable(meas_idx_padded),
             dts_padded,
             rates_padded,
             boluses_padded,
             meas_idx_padded,
-            CL / V1,   # k10
-            Q2 / V1,   # k12
-            Q2 / V2,   # k21
-            Q3 / V1,   # k13
-            Q3 / V3,   # k31
-            V1
+            CL / V1,  # k10
+            Q2 / V1,  # k12
+            Q2 / V2,  # k21
+            Q3 / V1,  # k13
+            Q3 / V3,  # k31
+            V1,
         )
         IPRED = pt.flatten(all_Cp)[valid_flat_indices]
         ERR = IPRED * sigma_prop
@@ -214,11 +216,15 @@ def build_model(rates, dv, covar, bio_map, bolus) -> pm.Model:
 
 def main():
     # rate, dv, covar, bio_map, bolus = read_nonmem_dataset("./eleveld.csv")
-    rate, dv, covar, bio_map, bolus = read_nonmem_dataset("./schnider.csv",sep=',',dv_col='CP')
+    rate, dv, covar, bio_map, bolus = read_nonmem_dataset(
+        "./schnider.csv", sep=",", dv_col="CP"
+    )
     model = build_model(rate, dv, covar, bio_map, bolus)
     add_omegas(model)
     with model:
-        compiled = nutpie.compile_pymc_model(model, backend="jax", gradient_backend="jax")
+        compiled = nutpie.compile_pymc_model(
+            model, backend="jax", gradient_backend="jax"
+        )
         idata = nutpie.sample(compiled)
         # idata = inference.fit_laplace(model=model, gradient_backend="jax")
     az.to_netcdf(idata, "idata.nc")

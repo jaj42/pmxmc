@@ -23,9 +23,11 @@ jax.config.update("jax_enable_x64", True)
 @wrap_jax
 def _threecomp_single_occasion(
     dts, rates, boluses, meas_indices,
-    k10, k12, k21, k13, k31, V1, V2, V3,
+    k10, k12, k21, k13, k31, V1
 ):
     """Single-occasion 3-compartment PK solver (pure JAX, no batching)."""
+    V2 = (k12 / k21) * V1
+    V3 = (k13 / k31) * V1
     a2 = k12 * jnp.sqrt(V1 / V2)
     a3 = k13 * jnp.sqrt(V1 / V3)
     S = jnp.array(
@@ -50,13 +52,9 @@ def _threecomp_single_occasion(
     return jnp.sum(all_states[meas_indices], axis=-1)
 
 
-# pt.vectorize batches _threecomp_single_occasion over occasions.
-# Compiles to jnp.vectorize (→ jax.vmap) via the Blockwise JAX dispatch.
-# Signature: four 1-D arrays (dts/rates/boluses of length n, meas_indices of
-# length m), eight scalars (PK params) → one 1-D array of length m.
 threecomp_advan = pt.vectorize(
     _threecomp_single_occasion,
-    signature="(n),(n),(n),(m),(),(),(),(),(),(),(),()->(m)",
+    signature="(n),(n),(n),(m),(),(),(),(),(),()->(m)",
 )
 
 
@@ -127,10 +125,14 @@ def precompute_occasion_data(rates, dv, bolus, bio_map, bio_idx_map, unique_occ_
 
     return (
         np.array(bio_indices),
-        dts_padded,
-        rates_padded,
-        boluses_padded,
-        meas_idx_padded,
+            pt.as_tensor_variable(dts_padded),
+            pt.as_tensor_variable(rates_padded),
+            pt.as_tensor_variable(boluses_padded),
+            pt.as_tensor_variable(meas_idx_padded),
+        # dts_padded,
+        # rates_padded,
+        # boluses_padded,
+        # meas_idx_padded,
         valid_flat_indices,
     )
 
@@ -188,16 +190,20 @@ def build_model(rates, dv, covar, bio_map, bolus) -> pm.Model:
         Q3 = theta_Q3
 
         all_Cp = threecomp_advan(
-            pt.as_tensor_variable(dts_padded),
-            pt.as_tensor_variable(rates_padded),
-            pt.as_tensor_variable(boluses_padded),
-            pt.as_tensor_variable(meas_idx_padded),
+            # pt.as_tensor_variable(dts_padded),
+            # pt.as_tensor_variable(rates_padded),
+            # pt.as_tensor_variable(boluses_padded),
+            # pt.as_tensor_variable(meas_idx_padded),
+            dts_padded,
+            rates_padded,
+            boluses_padded,
+            meas_idx_padded,
             CL / V1,   # k10
             Q2 / V1,   # k12
             Q2 / V2,   # k21
             Q3 / V1,   # k13
             Q3 / V3,   # k31
-            V1, V2, V3,
+            V1
         )
         IPRED = pt.flatten(all_Cp)[valid_flat_indices]
         ERR = IPRED * sigma_prop
@@ -212,7 +218,7 @@ def main():
     model = build_model(rate, dv, covar, bio_map, bolus)
     add_omegas(model)
     with model:
-        compiled = nutpie.compile_pymc_model(model, backend="jax")
+        compiled = nutpie.compile_pymc_model(model, backend="jax", gradient_backend="jax")
         idata = nutpie.sample(compiled)
         # idata = inference.fit_laplace(model=model, gradient_backend="jax")
     az.to_netcdf(idata, "idata.nc")

@@ -138,10 +138,78 @@ def plot_pareto_k_by_subject(idata, subject_per_obs, ax=None):
     return fig, ax
 
 
-def plot_model_criticism(
-    idata, obs_var, subject_per_obs, output="criticism.pdf", prob=0.89
+def plot_ppc_by_subject(
+    idata, obs_var, subject_per_obs, time_per_obs, prob=0.89, ncols=4
 ):
-    """Save residual, coverage, and Pareto-k plots to a PDF.
+    """Grid of per-subject posterior predictive plots.
+
+    Each panel shows the posterior predictive mean + credible band and the
+    observed data points for one subject.
+
+    Parameters
+    ----------
+    time_per_obs : array-like
+        Time value for each observation row, same length as the obs dimension.
+    ncols : int
+        Number of columns in the grid.
+
+    Returns
+    -------
+    fig : matplotlib Figure
+    """
+    subject_per_obs = np.asarray(subject_per_obs)
+    time_per_obs = np.asarray(time_per_obs)
+
+    ppc = idata.posterior_predictive[obs_var]
+    q_lo, q_hi = (1 - prob) / 2, 1 - (1 - prob) / 2
+    ppc_mean = ppc.mean(("chain", "draw")).values
+    ppc_lo = ppc.quantile(q_lo, ("chain", "draw")).values
+    ppc_hi = ppc.quantile(q_hi, ("chain", "draw")).values
+    obs = idata.observed_data[obs_var].values
+
+    subjects = np.unique(subject_per_obs)
+    nrows = int(np.ceil(len(subjects) / ncols))
+    fig, axes = plt.subplots(
+        nrows, ncols, figsize=(ncols * 3.5, nrows * 2.8), squeeze=False
+    )
+
+    for i, subj in enumerate(subjects):
+        ax = axes[i // ncols][i % ncols]
+        mask = subject_per_obs == subj
+        order = np.argsort(time_per_obs[mask])
+        t = time_per_obs[mask][order]
+
+        ax.fill_between(
+            t,
+            ppc_lo[mask][order],
+            ppc_hi[mask][order],
+            alpha=0.3,
+            color="steelblue",
+        )
+        ax.plot(t, ppc_mean[mask][order], color="steelblue", linewidth=1)
+        ax.scatter(t, obs[mask][order], color="k", s=8, zorder=5)
+        ax.set_title(str(subj), fontsize=8)
+        ax.tick_params(labelsize=6)
+
+    for j in range(len(subjects), nrows * ncols):
+        axes[j // ncols][j % ncols].set_visible(False)
+
+    fig.supxlabel("Time", fontsize=9)
+    fig.supylabel(obs_var, fontsize=9)
+    fig.suptitle(f"Posterior predictive — {int(prob * 100)}% CI", fontsize=10)
+    plt.tight_layout()
+    return fig
+
+
+def plot_model_criticism(
+    idata,
+    obs_var,
+    subject_per_obs,
+    time_per_obs=None,
+    output="criticism.pdf",
+    prob=0.89,
+):
+    """Save residual, coverage, Pareto-k, and (optionally) per-subject PPC plots to a PDF.
 
     Parameters
     ----------
@@ -149,6 +217,8 @@ def plot_model_criticism(
         Name of the observed variable in idata.posterior_predictive.
     subject_per_obs : array-like
         Subject ID for each observation row, same length as the obs dimension.
+    time_per_obs : array-like, optional
+        Time value per observation. When provided, per-subject PPC panels are included.
     """
     with PdfPages(output) as pdf:
         fig, _ = plot_residuals_by_subject(idata, obs_var, subject_per_obs)
@@ -168,3 +238,10 @@ def plot_model_criticism(
             plt.close()
         except Exception as exc:
             print(f"Pareto-k skipped (need log_likelihood in idata): {exc}")
+
+        if time_per_obs is not None:
+            fig = plot_ppc_by_subject(
+                idata, obs_var, subject_per_obs, time_per_obs, prob=prob
+            )
+            pdf.savefig(fig)
+            plt.close()

@@ -5,19 +5,16 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
- "arviz>=0.23.4",
- "arviz-base>=1.0.0",
- "arviz-plots>=1.0.0",
- "arviz-stats>=1.0.0",
+ "arviz>=v1.2.0",
  "diffrax>=0.7.2",
- "jax>=0.10.0",
+ "jax>=0.10.1",
+ "netcdf4>=1.7.4",
  "nutpie>=0.16.8",
  "pandas>=3.0.2",
  "polars>=1.0.0",
- "pymc>=5.28.4",
+ "pymc>=6",
+ "pymc-debug",
  "pymc-extras",
- "pytensor>=2.38.2",
- "sympy>=1.14.0",
 ]
 
 [build-system]
@@ -28,8 +25,7 @@ build-backend = "hatchling.build"
 packages = ["src/pmxmc"]
 
 [tool.uv.sources]
-#pytensor = { path = "../../../devel/upstream/pytensor", editable = true }
-jax = { path = "../../../devel/upstream/jax", editable = true }
+pymc-debug = { path = "../pymc_debug", editable = true }
 pymc-extras = { path = "../upstream/pymc-extras", editable = true }
 
 [dependency-groups]

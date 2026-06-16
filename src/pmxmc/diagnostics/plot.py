@@ -2,12 +2,10 @@ import re
 from sys import argv
 
 import arviz as az
-import arviz_base as azb
-import arviz_stats as azs
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
-azb.rcParams["plot.max_subplots"] = 500
+az.rcParams["plot.max_subplots"] = 500
 
 patterns = {
     "omega": "^omega.*[^_]$",
@@ -26,13 +24,13 @@ def _available_parameters(idata):
 
 
 def plot_param_type(idata, name, pattern, device):
-    az.plot_trace(idata, var_names=[pattern], filter_vars="regex")
+    az.plot_trace_dist(idata, var_names=[pattern], filter_vars="regex")
     plt.suptitle(f"{name} Trace")
     plt.tight_layout()
     device.savefig()
     plt.close()
 
-    az.plot_posterior(idata, var_names=[pattern], filter_vars="regex")
+    az.plot_dist(idata, var_names=[pattern], filter_vars="regex")
     plt.suptitle(f"{name} posterior")
     plt.tight_layout()
     device.savefig()
@@ -41,7 +39,7 @@ def plot_param_type(idata, name, pattern, device):
     fig, ax = plt.subplots()
     ax.axis("off")
     ax.table(
-        azs.summary(idata, var_names=[pattern], filter_vars="regex"),
+        az.summary(idata, var_names=[pattern], filter_vars="regex"),
         loc="center",
     )
     fig.suptitle(name)
@@ -61,14 +59,14 @@ def plot_idata(
 
     with PdfPages(output) as pdf:
         if prior_predictive:
-            az.plot_ppc(idata, group="prior")
+            az.plot_ppc_dist(idata, group="prior_predictive")
             plt.suptitle("Prior Predictive")
             plt.tight_layout()
             pdf.savefig()
             plt.close()
 
         if posterior_predictive:
-            az.plot_ppc(idata, group="posterior")
+            az.plot_ppc_dist(idata, group="posterior_predictive")
             plt.suptitle("Posterior Predictive")
             plt.tight_layout()
             pdf.savefig()
@@ -88,7 +86,7 @@ def plot_idata(
 
         # ETA
         if params["eta"]:
-            az.plot_trace(
+            az.plot_trace_dist(
                 idata,
                 var_names=[patterns["eta"]],
                 filter_vars="regex",

@@ -5,7 +5,6 @@ from multiprocessing import cpu_count
 os.environ["XLA_FLAGS"] = f"--xla_force_host_platform_device_count={cpu_count() - 2}"
 os.environ["JAX_PLATFORMS"] = "cpu"
 
-import arviz as az
 import jax
 import numpy as np
 import nutpie
@@ -14,6 +13,7 @@ import pytensor.tensor as pt
 
 from pmxmc import assets
 from pmxmc.advan import threecomp_advan as advan
+from pmxmc.diagnostics import plot_idata, print_table
 from pmxmc.io import read_nonmem_dataset
 from pmxmc.utils import add_omegas
 
@@ -99,8 +99,11 @@ def main():
     with model:
         compiled = nutpie.compile_pymc_model(model, backend="jax")
         idata = nutpie.sample(compiled)
-        # idata = fit_dadvi(gradient_backend="jax")
-    az.to_netcdf(idata, "idata.nc")
+    idata.to_netcdf("idata.nc")
+
+    # plot_model_criticism(idata, "Cp_obs", subject_per_obs,time_per_obs)
+    plot_idata(idata, "pk.pdf")
+    print_table(idata)
 
 
 if __name__ == "__main__":

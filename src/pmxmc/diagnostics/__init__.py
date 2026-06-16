@@ -2,6 +2,7 @@ from .criticism import (
     plot_coverage_by_subject,
     plot_model_criticism,
     plot_pareto_k_by_subject,
+    plot_ppc_by_subject,
     plot_residuals_by_subject,
 )
 from .debug import (
@@ -25,5 +26,6 @@ __all__ = [
     "plot_residuals_by_subject",
     "plot_coverage_by_subject",
     "plot_pareto_k_by_subject",
+    "plot_ppc_by_subject",
     "plot_model_criticism",
 ]

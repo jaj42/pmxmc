@@ -15,7 +15,7 @@ from pmxmc import assets
 from pmxmc.advan import threecomp_advan as advan
 from pmxmc.diagnostics import plot_idata, print_table
 from pmxmc.io import read_nonmem_dataset
-from pmxmc.utils import add_omegas
+from pmxmc.utils import add_omegas, sample_predictive
 
 jax.config.update("jax_enable_x64", True)
 
@@ -99,10 +99,11 @@ def main():
     with model:
         compiled = nutpie.compile_pymc_model(model, backend="jax")
         idata = nutpie.sample(compiled)
+        idata = sample_predictive(idata)
     idata.to_netcdf("idata.nc")
 
     # plot_model_criticism(idata, "Cp_obs", subject_per_obs,time_per_obs)
-    plot_idata(idata, "pk.pdf")
+    plot_idata(idata, "pk.pdf", prior_predictive=True, posterior_predictive=True)
     print_table(idata)
 
 

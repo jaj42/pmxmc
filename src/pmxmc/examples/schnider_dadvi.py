@@ -12,10 +12,10 @@ import pytensor.tensor as pt
 from pymc_extras import inference
 
 from pmxmc import assets
-from pmxmc.advan import threecomp_advan as advan
+from pmxmc.advan import threecomp_advan as threecomp
 from pmxmc.diagnostics import plot_idata, print_table
 from pmxmc.io import read_nonmem_dataset
-from pmxmc.utils import add_omegas
+from pmxmc.utils import add_omegas, sample_predictive
 
 jax.config.update("jax_enable_x64", True)
 
@@ -74,7 +74,7 @@ def build_model(ds) -> pm.Model:
                 "V1": V1, "V2": V2, "V3": V3,
             }  # fmt: skip
 
-            Cp = advan(
+            Cp = threecomp(
                 meas_time.to_numpy(), rate.index.to_numpy(), rate.to_numpy(), params
             )
             C_preds.append(Cp)
@@ -100,10 +100,12 @@ def main():
         # compiled = nutpie.compile_pymc_model(model, backend="jax")
         # idata = nutpie.sample(compiled)
         idata = inference.fit_dadvi(gradient_backend="jax")
+        idata = sample_predictive(idata)
+
     idata.to_netcdf("idata.nc")
 
     # plot_model_criticism(idata, "Cp_obs", subject_per_obs,time_per_obs)
-    plot_idata(idata, "pk.pdf")
+    plot_idata(idata, "pk.pdf", prior_predictive=True, posterior_predictive=True)
     print_table(idata)
 
 

@@ -53,11 +53,11 @@ def sample_predictive(trace, model=None):
     if model is None:
         model = pm.Model.get_context()
     with model:
-        prior = pm.sample_prior_predictive(draws=1000)
-        posterior = pm.sample_posterior_predictive(trace)
+        prior = pm.sample_prior_predictive(draws=1000, backend="jax")
+        posterior = pm.sample_posterior_predictive(trace, backend="jax")
     idata = trace.copy()
-    idata.extend(prior)
-    idata.extend(posterior)
+    idata.update(prior)
+    idata.update(posterior)
     return idata
 
 

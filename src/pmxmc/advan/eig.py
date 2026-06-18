@@ -1,8 +1,9 @@
 import jax.numpy as jnp
 import numpy as np
 from jax import lax
-from pmxmc.utils import rate_at
 from pytensor import wrap_jax
+
+from pmxmc.utils import rate_at
 
 
 def eigendecomposition(S, B, f=None, y0=None, real_eigenvalues=True):

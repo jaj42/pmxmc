@@ -1,8 +1,9 @@
 import jax
 import jax.numpy as jnp
 import numpy as np
-from pmxmc.utils import rate_at
 from pytensor import wrap_jax
+
+from pmxmc.utils import rate_at
 
 
 @wrap_jax

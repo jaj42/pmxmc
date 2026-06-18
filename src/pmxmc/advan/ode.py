@@ -1,7 +1,8 @@
 import diffrax as dfx
 import jax.numpy as jnp
-from pmxmc.utils import build_rate_func
 from pytensor import wrap_jax
+
+from pmxmc.utils import build_rate_func
 
 
 @wrap_jax

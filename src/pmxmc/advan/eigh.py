@@ -3,9 +3,8 @@ import jax.numpy as jnp
 import numpy as np
 import pytensor
 import pytensor.tensor as pt
-from pytensor import wrap_jax
-
 from pmxmc.utils import rate_at_numpy as rate_at
+from pytensor import wrap_jax
 
 pytensor.config.floatX = "float64"
 jax.config.update("jax_enable_x64", True)

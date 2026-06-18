@@ -9,13 +9,12 @@ import jax
 import numpy as np
 import pymc as pm
 import pytensor.tensor as pt
-from pymc_extras import inference
-
 from pmxmc import assets
 from pmxmc.advan import threecomp_advan as threecomp
 from pmxmc.diagnostics import plot_idata, print_table
 from pmxmc.io import read_nonmem_dataset
 from pmxmc.utils import add_omegas, sample_predictive
+from pymc_extras import inference
 
 jax.config.update("jax_enable_x64", True)
 

@@ -10,13 +10,12 @@ import numpy as np
 import pymc as pm
 import pytensor
 import pytensor.tensor as pt
-from pymc_extras import inference
-
 from pmxmc import assets
 from pmxmc.advan.eigh import threecomp_advan_vec
 from pmxmc.diagnostics import print_table
 from pmxmc.io import read_nonmem_dataset_padded
 from pmxmc.utils import add_omegas
+from pymc_extras import inference
 
 jax.config.update("jax_enable_x64", True)
 pytensor.config.floatX = "float64"

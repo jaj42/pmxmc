@@ -12,7 +12,6 @@ import numpy as np
 import nutpie
 import pymc as pm
 import pytensor.tensor as pt
-
 from pmxmc import assets
 from pmxmc.advan import ode_advan
 from pmxmc.diagnostics import plot_idata, print_table
@@ -105,12 +104,7 @@ def main():
     with model:
         add_omegas()
         compiled = nutpie.compile_pymc_model(model, backend="jax")
-        idata = nutpie.sample(
-            compiled,
-            draws=50,
-            tune=20,
-            chains=2,
-        )
+        idata = nutpie.sample(compiled, chains=4)
     idata.to_netcdf("idata_ode_nuts.nc")
 
     # plot_model_criticism(idata, "Cp_obs", subject_per_obs,time_per_obs)
